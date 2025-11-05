@@ -19,12 +19,12 @@ def read_requirements():
 setup(
     name="multimodal-emotion-recognition",
     version="1.0.0",
-    author="Multimodal Emotion Recognition Team",
-    author_email="your-email@example.com",
+    author="",
+    author_email="",
     description="Real-Time Multimodal Emotion Recognition and Summarization",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/multimodal-emotion-recognition",
+    url="",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",

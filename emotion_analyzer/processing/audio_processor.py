@@ -15,7 +15,7 @@ class AudioProcessor:
         
         # Initialize Whisper model for STT
         try:
-            model_name = config.get('whisper_model', 'base.en')
+            model_name = config.get('whisper_model', 'tiny.en')
             self.whisper_model = whisper.load_model(model_name, device=self.device)
         except Exception as e:
             print(f"Error loading Whisper model: {e}")

@@ -147,7 +147,7 @@ class InputManager:
     
     def _audio_capture_worker_live(self):
         """Capture audio from microphone"""
-        def audio_callback(indata, frames, time, status):
+        def audio_callback(indata, frames, time_info, status):
             if status:
                 print(f"Audio callback status: {status}")
             timestamp = time.time()
