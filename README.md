@@ -1,216 +1,141 @@
-# Multimodal Emotion Recognition
+<div align="center">
 
-Real-time emotion recognition system combining facial expressions, speech tone, and text sentiment analysis from webcam feeds and video files.
+# 🎭 Multimodal Emotion Recognition
 
-## Features
+**Reads emotion from your face, your voice and your words, in real time.**
 
-- **Multimodal Analysis**: Facial expressions (DeepFace), speech emotion (Whisper + Transformers), and text sentiment
-- **Real-time Processing**: Live webcam analysis with interactive visualization
-- **Video File Support**: Analyze pre-recorded videos with synchronized audio processing
-- **Emotion Fusion**: Intelligent combination of results from all modalities
-- **Summary Generation**: Automatic emotion summaries and statistics
+Point it at a webcam or a video file and get a live emotion overlay plus an end-of-session report.
 
-## Installation
+[![tests](https://github.com/sudo-YashBhardwaj/Multimodal-Emotion-Recogniton/actions/workflows/tests.yml/badge.svg)](https://github.com/sudo-YashBhardwaj/Multimodal-Emotion-Recogniton/actions/workflows/tests.yml)
+![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+</div>
+
+## ✨ Highlights
+
+- **Three modalities:** 😀 facial expression, 🗣️ tone of voice and 💬 the words being said.
+- **Real time:** speech is analysed on a background thread, so the video never waits for Whisper.
+- **Live or offline:** use a webcam and microphone, or any video file that ffmpeg can read.
+- **One vocabulary:** every channel reports the same 7 emotions: angry, disgust, fear, happy, sad, surprise, neutral.
+- **Session report:** see the emotion distribution, sustained negative stretches and overall sentiment.
+
+## 🧠 How it works
+
+```mermaid
+flowchart LR
+    SRC["🎥 Webcam + mic<br/>or video file"] --> F["Frames"]
+    SRC --> A["Audio<br/>16 kHz mono"]
+
+    F --> MT["MTCNN<br/>face detection"] --> DF["DeepFace<br/>expression CNN"] --> FACE(["😀 face"])
+    A -- "4 s windows" --> PR["Prosody<br/>energy · ZCR · centroid"] --> VOICE(["🗣️ voice"])
+    A -- "4 s windows" --> WH["Whisper<br/>speech-to-text"] --> RB["RoBERTa<br/>GoEmotions"] --> TEXT(["💬 text"])
+
+    FACE & VOICE & TEXT --> FU{"Late fusion"}
+    FU --> HUD["🖥️ Live overlay"]
+    FU --> REP["📊 Session report"]
+```
+
+| Channel | Signal | Model |
+|---|---|---|
+| 😀 **Face** | Expression of the largest face in the frame | [MTCNN](https://github.com/ipazc/mtcnn) detection → [DeepFace](https://github.com/serengil/deepface) emotion CNN |
+| 🗣️ **Voice** | Loudness, zero-crossing rate, spectral centroid | Hand-tuned prosody heuristic ([`prosody.py`](emotion_analyzer/prosody.py)) |
+| 💬 **Text** | The words being spoken | [Whisper](https://github.com/openai/whisper) → [RoBERTa GoEmotions](https://huggingface.co/SamLowe/roberta-base-go_emotions), 28 labels mapped onto 7 |
+
+**Fusion.** On every frame, the channels are combined in priority order: *text → face → voice*. The first channel that reports a non-neutral emotion wins, so a clear signal on one channel beats "neutral" on the others. Confidence reflects how many channels agree:
+
+```
+confidence = 0.5 + 0.4 × agreeing_channels / 3      # ~63 % for one channel, 90 % for all three
+```
+
+A frame with no face or a silent audio window counts as *no signal*, not as neutral.
+
+## 🚀 Quickstart
+
+**Requirements:** Python 3.9+ and [ffmpeg](https://ffmpeg.org/download.html), which Whisper uses and which reads audio from video files. Live mode also needs a webcam and a microphone.
 
 ```bash
-# Clone repository
-git clone <repository-url>
+git clone https://github.com/sudo-YashBhardwaj/Multimodal-Emotion-Recogniton.git
 cd Multimodal-Emotion-Recogniton
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e .
 ```
 
-Models will be downloaded automatically on first run.
-
-## Usage
-
-### Live Webcam Analysis
 ```bash
-python main.py --source 0
+emotion-recognition                           # webcam 0 + default microphone
+emotion-recognition --source interview.mp4    # a video file
+emotion-recognition --no-audio                # facial expressions only
 ```
 
-### Video File Analysis
-```bash
-python main.py --source path/to/video.mp4
+The model weights (~650 MB) download automatically on the first run. `python -m emotion_analyzer` also works.
+
+| Option | Default | Description |
+|---|---|---|
+| `--source` | `0` | Webcam index or path to a video file |
+| `--device` | `cpu` | Set to `cuda` to run Whisper and RoBERTa on the GPU |
+| `--whisper-model` | `base.en` | Any [Whisper checkpoint](https://github.com/openai/whisper#available-models-and-languages). `tiny.en` is the fastest |
+| `--detection-threshold` | `0.9` | Minimum face-detector confidence |
+| `--audio-window` | `4` | Seconds of audio in each speech analysis |
+| `--no-audio` | off | Skip the voice and text channels |
+
+**Keys:** `q` / `Esc` quit · `s` print summary · `l` toggle the colour legend
+
+## 📊 Session report
+
+When the session ends, or when you press `s`, you get a report like this:
+
+```
+Emotion summary
+===============
+Duration: 42.2s (215 observations)
+
+Distribution
+  happy      43%  █████████████
+  neutral    34%  ██████████
+  angry      18%  █████
+  surprise    5%  ██
+
+Sustained negative emotion
+  angry      23.0s -> 30.4s (7.4s)
+
+Overall sentiment: positive (48% positive, 18% negative)
 ```
 
-### Options
-```bash
-python main.py --source 0 \
-    --device cuda \                    # Use GPU (cpu/cuda)
-    --whisper-model base.en \         # Whisper model (tiny/base/small/medium/large)
-    --detection-threshold 0.7         # Face detection threshold (0.0-1.0)
-```
-
-### Controls
-- `q` - Quit
-- `s` - Show emotion summary
-- `l` - Toggle legend
-
-## Project Structure
+## 🗂️ Project structure
 
 ```
 emotion_analyzer/
-├── input/
-│   └── input_manager.py          # Video/audio input handling with threading
-├── processing/
-│   ├── video_processor.py        # MTCNN + DeepFace facial expression analysis
-│   ├── audio_processor.py        # Whisper STT + RoBERTa SER
-│   └── text_processor.py         # RoBERTa text emotion analysis
-├── fusion/
-│   └── fusion_engine.py          # Priority-based late fusion algorithm
-├── analysis/
-│   ├── emotion_tracker.py        # Emotion history tracking and statistics
-│   └── summarizer.py             # Summary generation with sentiment analysis
-└── output/
-    └── display.py                # OpenCV-based real-time visualization
+├── cli.py        # entry point: builds the pipeline and runs the main loop
+├── capture.py    # threaded webcam/file frames, microphone buffer, ffmpeg audio
+├── face.py       # 😀 MTCNN + DeepFace
+├── speech.py     # 🗣️ 💬 prosody + Whisper on a background worker
+├── prosody.py    # acoustic features → emotion heuristic
+├── text.py       # RoBERTa GoEmotions classifier
+├── emotions.py   # shared 7-emotion vocabulary + GoEmotions mapping
+├── fusion.py     # priority-based late fusion
+├── session.py    # history, sustained-emotion periods, report
+└── display.py    # OpenCV overlay
+tests/            # pytest suite for the model-free core
 ```
 
-### Implementation Details
+## 🧪 Development
 
-#### Input Manager (`input_manager.py`)
-- **Threading**: Separate worker threads for video and audio capture
-- **Queue System**: `queue.Queue(maxsize=10)` for thread-safe data transfer
-- **Live Mode**: Direct webcam/microphone capture via OpenCV and SoundDevice
-- **Offline Mode**: MoviePy-based audio extraction from video files
-- **Synchronization**: Timestamp-based alignment of video frames and audio chunks
-
-#### Video Processor (`video_processor.py`)
-- **Face Detection**: MTCNN with confidence threshold filtering
-- **Fallback Mechanism**: OpenCV Haar Cascades if MTCNN initialization fails
-- **Emotion Analysis**: DeepFace ensemble model (VGG-Face, Facenet, OpenFace, DeepFace)
-- **Multi-face Support**: Processes all detected faces in parallel
-- **Output Format**: List of dictionaries with bounding boxes, emotions, and confidence scores
-
-#### Audio Processor (`audio_processor.py`)
-- **STT Pipeline**: Whisper model (configurable: tiny/base/small/medium/large)
-- **SER Pipeline**: RoBERTa-base-go-emotions on transcribed text
-- **Audio Normalization**: Automatic preprocessing (padding, normalization)
-- **Device Support**: CPU/CUDA device selection via PyTorch
-- **Chunk Processing**: 1024-sample blocks (~64ms at 16kHz)
-
-#### Text Processor (`text_processor.py`)
-- **Model**: RoBERTa-base-go-emotions (same as SER, different input)
-- **Tokenization**: Hugging Face AutoTokenizer
-- **Emotion Mapping**: Maps 28 emotion labels to 7 primary emotions
-- **Confidence Scoring**: Softmax-based probability distribution
-
-#### Fusion Engine (`fusion_engine.py`)
-- **Algorithm**: Late fusion with priority-based selection
-- **Priority Order**: Text (3) > Video (2) > Audio (1)
-- **Neutral Filtering**: Prioritizes non-neutral emotions across modalities
-- **Confidence Calculation**: Agreement-based scoring (0.5-0.9 range)
-- **Fallback**: Mode-based selection if priority fails
-
-#### Emotion Tracker (`emotion_tracker.py`)
-- **Data Structure**: Time-series list of emotion events
-- **Statistics**: Distribution, frequency, duration calculations
-- **Timeline Analysis**: Period identification and pattern detection
-
-#### Display Manager (`display.py`)
-- **Rendering**: OpenCV drawing functions for real-time overlay
-- **Visualization**: Bounding boxes, emotion labels, confidence scores
-- **Interactive**: Legend toggle, summary display
-
-## Architecture
-
-### Processing Pipeline
-
-```
-Input → Video/Audio Capture → Multi-modal Processing → Fusion → Display
-         (Threading)           (Parallel Channels)      (Late)   (OpenCV)
+```bash
+pip install -e ".[dev]"
+pytest
 ```
 
-1. **Input Layer**: Separate threads for video (30fps) and audio (16kHz, 1024 sample blocks)
-2. **Processing Layer**: Three parallel pipelines:
-   - **Video**: MTCNN face detection → DeepFace emotion analysis
-   - **Audio**: Whisper STT → RoBERTa-based SER (Speech Emotion Recognition)
-   - **Text**: RoBERTa-based TEA (Text Emotion Analysis) on transcribed speech
-3. **Fusion Layer**: Priority-based late fusion (Text > Video > Audio)
-4. **Output Layer**: Real-time visualization with emotion overlays
+The tests cover fusion, the session report, the prosody features and the label mapping. They only need NumPy, so CI runs them in seconds.
 
-### Concurrency Model
+## ⚠️ Limitations
 
-- **Multi-threaded input capture**: Separate threads for video and audio streams
-- **Queue-based buffering**: Thread-safe queues (maxsize=10) prevent blocking
-- **Frame dropping**: Queue full → skip frame to maintain real-time performance
-- **Synchronization**: Timestamp-based alignment across modalities
+- **The voice channel is a heuristic baseline**, not a trained model. Replacing it with a learned speech-emotion model (e.g. wav2vec2) would give the biggest accuracy gain.
+- **Facial-expression models are trained on FER-2013**, and their accuracy is known to vary across demographics. An expression is also not the same thing as a felt emotion.
+- **Transcription is English-only.**
+- **DeepFace runs on TensorFlow**, so `--device` only affects the PyTorch models (Whisper and RoBERTa).
 
-### Models
+This is a research and demo project. Please don't use it to make decisions about people.
 
-| Component | Model | Architecture | Parameters | Input |
-|-----------|-------|--------------|------------|-------|
-| **Face Detection** | MTCNN | Multi-task CNN | ~3M | RGB frames (any resolution) |
-| **Face Emotion** | DeepFace | Ensemble (VGG-Face, Facenet, OpenFace, DeepFace) | ~100M | Detected face regions |
-| **Speech-to-Text** | OpenAI Whisper | Transformer (base.en) | ~74M | 16kHz mono audio |
-| **Speech Emotion** | RoBERTa-base-go-emotions | RoBERTa (base) | ~125M | Transcribed text |
-| **Text Emotion** | RoBERTa-base-go-emotions | RoBERTa (base) | ~125M | Text tokens |
+## 📄 License
 
-### Fusion Algorithm
-
-**Late Fusion Strategy**: Priority-based emotion selection
-
-1. **Emotion Extraction**: Extract dominant emotion from each modality
-2. **Neutral Filtering**: Prioritize non-neutral emotions
-3. **Priority Selection**: 
-   - Text modality (priority 3) - Most reliable
-   - Video modality (priority 2) - Visual cues
-   - Audio modality (priority 1) - Prosodic features
-4. **Confidence Calculation**: 
-   - Agreement-based: `0.5 + (agreement_ratio * 0.4)`
-   - Max confidence: 0.9 when all modalities agree
-
-### Audio Processing
-
-- **Sample Rate**: 16kHz (mono)
-- **Block Size**: 1024 samples (~64ms chunks)
-- **Preprocessing**: Automatic normalization and padding
-- **STT**: Whisper processes audio segments with timestamps
-- **SER**: RoBERTa analyzes transcribed text for emotion
-
-### Video Processing
-
-- **Frame Rate**: Variable (typically 30fps from webcam)
-- **Face Detection**: MTCNN with confidence threshold (default: 0.7)
-- **Fallback**: OpenCV Haar Cascades if MTCNN fails
-- **Emotion Detection**: DeepFace analyzes each detected face
-- **Multi-face Support**: Processes all detected faces in frame
-
-### Performance Characteristics
-
-- **Latency**: ~100-300ms per frame (depends on model size)
-- **Throughput**: ~2-3 fps processing (with full pipeline)
-- **Memory**: ~2-4GB RAM (model loading)
-- **CPU Usage**: High (multi-threaded, CPU-intensive models)
-- **GPU Acceleration**: Optional CUDA support for PyTorch models
-
-### Technical Stack
-
-- **OpenCV** (4.8+) - Video I/O, frame processing, display
-- **DeepFace** (0.0.79+) - Facial expression recognition
-- **OpenAI Whisper** (20231117+) - Speech-to-text conversion
-- **Hugging Face Transformers** (4.30+) - RoBERTa models for emotion analysis
-- **MTCNN** (0.1.1+) - Face detection
-- **MoviePy** (1.0.3+) - Video/audio extraction (offline mode)
-- **PyTorch** (2.0+) - Deep learning framework
-- **NumPy** (1.24+) - Numerical operations
-- **SoundDevice** (0.4.6+) - Real-time audio capture
-
-## Requirements
-
-- **Python**: 3.8+
-- **RAM**: 4GB minimum (8GB recommended)
-- **Storage**: ~2GB for models (first-time download)
-- **Webcam**: Required for live mode
-- **Microphone**: Required for live mode audio
-- **CUDA**: Optional (GPU acceleration for PyTorch models)
-- **OS**: Linux, macOS, Windows (with OpenCV support)
-
-## License
-
-MIT License - see LICENSE file for details.
+[MIT](LICENSE) © Yash Bhardwaj
